@@ -1,41 +1,39 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
-  FlatList,
-  StyleSheet,
   Text,
+  Button,
+  FlatList,
   TouchableOpacity,
+  Modal,
 } from "react-native";
-import { getDatabase, ref, onValue, remove } from "firebase/database";
+import { ref, onValue, update } from "firebase/database";
 import { db } from "./config";
 
 export function Filmes() {
   const [filmes, setFilmes] = useState([]);
+  const [selectedFilmeId, setSelectedFilmeId] = useState(null);
+  const [selectedClienteId, setSelectedClienteId] = useState(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    const database = getDatabase();
-    const filmesRef = ref(database, "filme");
-
+    const filmesRef = ref(db, "filme");
     onValue(filmesRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const filmesList = Object.entries(data).map(([id, filme]) => ({
           id,
           ...filme,
+          clienteId: filme.clienteId || null,
         }));
         setFilmes(filmesList);
       }
     });
-
-    return () => {
-      // Limpar o listener ao desmontar o componente
-      onValue(filmesRef);
-    };
   }, []);
 
-  const handleExcluirFilme = (id) => {
-    const filmeRef = ref(db, `filme/${id}`);
-    remove(filmeRef)
+  const handleExcluirFilme = (filmeId) => {
+    const filmeRef = ref(db, `filme/${filmeId}`);
+    update(filmeRef, { clienteId: null })
       .then(() => {
         console.log("Filme excluído com sucesso!");
       })
@@ -44,50 +42,60 @@ export function Filmes() {
       });
   };
 
+  const handleAssociarCliente = (filmeId) => {
+    setSelectedFilmeId(filmeId);
+    setShowModal(true);
+  };
+
+  const handleSelecionarCliente = (clienteId) => {
+    const filmeRef = ref(db, `filme/${selectedFilmeId}`);
+    update(filmeRef, { clienteId })
+      .then(() => {
+        console.log("Cliente associado ao filme com sucesso!");
+        setSelectedFilmeId(null);
+        setShowModal(false);
+      })
+      .catch((error) => {
+        console.error("Erro ao associar cliente ao filme:", error);
+      });
+  };
+
+  const handleFecharModal = () => {
+    setShowModal(false);
+  };
+
   return (
-    <View style={styles.container}>
-      {filmes.length > 0 ? (
-        <FlatList
-          data={filmes}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity onPress={() => handleExcluirFilme(item.id)}>
-              <View style={styles.itemContainer}>
-                <Text style={styles.item}>{item.titulo}</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Nenhum filme cadastrado</Text>
+    <View>
+      <Text>Lista de Filmes:</Text>
+      <FlatList
+        data={filmes}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <TouchableOpacity onPress={() => handleExcluirFilme(item.id)}>
+            <View>
+              <Text>{item.titulo}</Text>
+              {item.clienteId ? (
+                <Text>Cliente: {item.clienteId}</Text>
+              ) : (
+                <Button
+                  title="Associar Cliente"
+                  onPress={() => handleAssociarCliente(item.id)}
+                />
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+      <Modal visible={showModal}>
+        <View>
+          <Text>Conteúdo do modal</Text>
+          <Button
+            title="Selecionar Cliente"
+            onPress={() => handleSelecionarCliente(selectedClienteId)}
+          />
+          <Button title="Fechar" onPress={handleFecharModal} />
         </View>
-      )}
+      </Modal>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  itemContainer: {
-    marginBottom: 10,
-  },
-  item: {
-    fontSize: 18,
-  },
-  emptyContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 20,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: "gray",
-  },
-});
-
-export default Filmes;

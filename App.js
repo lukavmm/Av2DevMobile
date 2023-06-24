@@ -96,6 +96,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-around",
     width: "80%",
+    flex: "wrap",
   },
   button: {
     marginTop: 10,

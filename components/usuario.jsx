@@ -191,6 +191,7 @@ const styles = StyleSheet.create({
   },
   botao: {
     borderRadius: 7,
+    margin: "5px",
     backgroundColor: "#054f77",
     fontFamily: "Roboto",
     color: "white",

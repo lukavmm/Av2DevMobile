@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Button, StyleSheet, Text, TextInput, View } from "react-native";
-import { getDatabase, ref, set, push, onValue, off } from "firebase/database";
+import {
+  getDatabase,
+  ref,
+  set,
+  push,
+  onValue,
+  off,
+  update,
+} from "firebase/database";
 
 export function Filme() {
   const [title, setTitle] = useState("");
@@ -15,6 +23,10 @@ export function Filme() {
   const [editGenre, setEditGenre] = useState("");
   const [editLancamento, setEditLancamento] = useState("");
   const [films, setFilms] = useState([]);
+
+  const [showModal, setShowModal] = useState(false);
+  const [selectedFilmId, setSelectedFilmId] = useState(null);
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
     const db = getDatabase();
@@ -33,8 +45,24 @@ export function Filme() {
       }
     });
 
+    const usersRef = ref(db, "user");
+
+    const usersListener = onValue(usersRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const userList = Object.keys(data).map((key) => ({
+          userId: key,
+          ...data[key],
+        }));
+        setUsers(userList);
+      } else {
+        setUsers([]);
+      }
+    });
+
     return () => {
       off(filmesRef, filmesListener);
+      off(usersRef, usersListener);
     };
   }, []);
 
@@ -87,154 +115,204 @@ export function Filme() {
     }
   }
 
-  async function updateFilm() {
-    const db = getDatabase();
-    const filmRef = ref(db, `filme/${editFilmId}`);
+  function updateFilm(filmId) {
+    // if (!validateDate(editLancamento)) {
+    //   setError("Data de lançamento inválida. Formato aceito: DD-MM-YYYY");
+    //   return;
+    // }
+    console.log(filmId);
 
-    await set(filmRef, {
+    const db = getDatabase();
+    const filmRef = ref(db, `filme/${filmId}`);
+
+    update(filmRef, {
       titulo: editTitle,
       duração: editDuration,
       genero: editGenre,
       lancamento: editLancamento,
-    });
-
-    setEditFilmId("");
-    setEditTitle("");
-    setEditDuration("");
-    setEditGenre("");
-    setEditLancamento("");
+    })
+      .then(() => {
+        console.log("Filme atualizado");
+        setEditFilmId("");
+        setEditTitle("");
+        setEditDuration("");
+        setEditGenre("");
+        setEditLancamento("");
+        setError("");
+      })
+      .catch((error) => {
+        console.log(error);
+      });
   }
 
-  async function deleteFilm(filmId) {
+  function deleteFilm(filmId) {
     const db = getDatabase();
     const filmRef = ref(db, `filme/${filmId}`);
 
-    await set(filmRef, null);
+    set(filmRef, null)
+      .then(() => {
+        console.log("Filme deletado");
+      })
+      .catch((error) => {
+        console.log(error);
+      });
+  }
+
+  function handleOpenModal(filmId) {
+    setSelectedFilmId(filmId);
+    setShowModal(true);
+  }
+
+  function handleAssociateUser(userId, userName) {
+    const db = getDatabase();
+    const filmRef = ref(db, `filme/${selectedFilmId}/user`);
+
+    update(filmRef, {
+      [userId]: true,
+      [userName]: userName,
+    })
+      .then(() => {
+        setShowModal(false);
+        setSelectedFilmId(null);
+      })
+      .catch((error) => {
+        console.log(error);
+      });
   }
 
   return (
-    <View>
-      <TextInput
-        style={styles.form}
-        value={title}
-        onChangeText={setTitle}
-        placeholder="Título"
-      />
-      <TextInput
-        style={styles.form}
-        value={duration}
-        onChangeText={setDuration}
-        placeholder="Duração"
-      />
-      <TextInput
-        style={styles.form}
-        value={genre}
-        onChangeText={setGenre}
-        placeholder="Gênero"
-      />
-      <TextInput
-        style={styles.form}
-        value={lancamento}
-        onChangeText={setLancamento}
-        placeholder="Data de lançamento (YYYY-MM-DD)"
-      />
-      <Button title="Cadastrar Filme" onPress={create} />
+    <View style={styles.container}>
+      <Text style={styles.title}>Cadastro de Filmes</Text>
+      <View style={styles.form}>
+        <TextInput
+          style={styles.input}
+          placeholder="Título"
+          value={title}
+          onChangeText={setTitle}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Duração"
+          value={duration}
+          onChangeText={setDuration}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Gênero"
+          value={genre}
+          onChangeText={setGenre}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Lançamento (DD-MM-YYYY)"
+          value={lancamento}
+          onChangeText={setLancamento}
+        />
+        {error !== "" && <Text style={styles.error}>{error}</Text>}
+        <Button title="Cadastrar" onPress={create} />
+      </View>
 
-      <Text style={styles.title}>Filmes Cadastrados:</Text>
+      <Text style={styles.title}>Lista de Filmes</Text>
       {films.map((film) => (
-        <View key={film.filmeId} style={styles.filmContainer}>
-          <Text style={styles.filmInfo}>Título: {film.titulo}</Text>
-          <Text style={styles.filmInfo}>Duração: {film.duração}</Text>
-          <Text style={styles.filmInfo}>Gênero: {film.genero}</Text>
-          <Text style={styles.filmInfo}>Lançamento: {film.lancamento}</Text>
-          <View style={styles.filmButtonContainer}>
-            <Button
-              style={styles.filmButton}
-              title="Editar"
-              onPress={() => handleEditFilm(film.filmeId)}
-            />
-            <Button
-              style={styles.filmButton}
-              title="Deletar"
-              onPress={() => deleteFilm(film.filmeId)}
-            />
-          </View>
+        <View style={styles.filmItem} key={film.filmeId}>
+          <Text style={styles.filmTitle}>{film.titulo}</Text>
+          <Text style={styles.filmText}>Duração: {film.duração}</Text>
+          <Text style={styles.filmText}>Gênero: {film.genero}</Text>
+          <Text style={styles.filmText}>Lançamento: {film.lancamento}</Text>
+          <Button title="Editar" onPress={() => updateFilm(film.filmeId)} />
+          <Button title="Deletar" onPress={() => deleteFilm(film.filmeId)} />
+          <Button
+            title="Associar Usuário"
+            onPress={() => handleOpenModal(film.filmeId)}
+          />
         </View>
       ))}
 
-      {editFilmId && (
-        <View>
-          <Text style={styles.title}>Editar Filme:</Text>
-          <TextInput
-            style={styles.form}
-            value={editTitle}
-            onChangeText={setEditTitle}
-            placeholder="Título"
-          />
-          <TextInput
-            style={styles.form}
-            value={editDuration}
-            onChangeText={setEditDuration}
-            placeholder="Duração"
-          />
-          <TextInput
-            style={styles.form}
-            value={editGenre}
-            onChangeText={setEditGenre}
-            placeholder="Gênero"
-          />
-          <TextInput
-            style={styles.form}
-            value={editLancamento}
-            onChangeText={setEditLancamento}
-            placeholder="Data de lançamento (DD-MM-YYYY)"
-          />
-          <Button title="Atualizar" onPress={updateFilm} />
+      {showModal && (
+        <View style={styles.modal}>
+          <Text style={styles.modalTitle}>Alugar</Text>
+          {users.map((user) => (
+            <View style={styles.userItem} key={user.userId}>
+              <Text style={styles.userName}>{user.name}</Text>
+              <Text style={styles.userName}>{user.email}</Text>
+              <Button
+                title="Alugar"
+                onPress={() => handleAssociateUser(user.userId, user.name)}
+              />
+            </View>
+          ))}
         </View>
       )}
-
-      {/* Renderizar a mensagem de erro, se houver */}
-      {error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  form: {
-    fontSize: 20,
-    margin: 5,
-    borderColor: "gray",
-    borderWidth: 1,
-    borderRadius: 10,
-    fontFamily: "Roboto",
-    padding: 10,
+  container: {
+    flex: 1,
+    padding: 20,
   },
   title: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: "bold",
-    marginTop: 20,
+    marginBottom: 20,
   },
-  filmContainer: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 10,
+  form: {
+    marginBottom: 20,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#999",
+    borderRadius: 5,
     padding: 10,
     marginBottom: 10,
   },
-  filmInfo: {
-    fontSize: 16,
-    marginBottom: 5,
-  },
-  filmButtonContainer: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-  },
-  filmButton: {
-    marginLeft: 10,
-  },
   error: {
     color: "red",
-    marginTop: 10,
+    marginBottom: 10,
+  },
+  filmItem: {
+    borderWidth: 1,
+    borderColor: "#999",
+    borderRadius: 5,
+    padding: 10,
+    marginBottom: 10,
+  },
+  filmTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 5,
+  },
+  filmText: {
+    marginBottom: 5,
+  },
+  modal: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 20,
+    color: "#fff",
+  },
+  userItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  userName: {
+    marginRight: 10,
+    color: "#fff",
+  },
+  associar: {
+    display: "flex",
   },
 });
-
 export default Filme;

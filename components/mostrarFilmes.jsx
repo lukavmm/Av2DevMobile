@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { View, Text } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet } from "react-native";
 import { getDatabase, ref, onValue } from "firebase/database";
 import { db } from "./config";
 
@@ -17,7 +17,24 @@ export function MostrarFilmes() {
           filmeId,
           ...filme,
         }));
-        setFilmes(filmesList);
+
+        Promise.all(
+          filmesList.map((filme) => {
+            return new Promise((resolve) => {
+              const usuariosRef = ref(db, `filme/${filme.filmeId}/user`);
+              onValue(usuariosRef, (snapshot) => {
+                const usuarios = snapshot.val() || {};
+                resolve({
+                  filmeId: filme.filmeId,
+                  ...filme,
+                  usuarios: Object.keys(usuarios),
+                });
+              });
+            });
+          })
+        ).then((result) => {
+          setFilmes(result);
+        });
       }
     });
   }, []);
@@ -31,6 +48,16 @@ export function MostrarFilmes() {
             <Text>Duração: {filme.duracao}</Text>
             <Text>Gênero: {filme.genero}</Text>
             <Text>Lançamento: {filme.lancamento}</Text>
+            {filme.usuarios.length > 0 && (
+              <>
+                <Text>Usuários associados:</Text>
+                <View style={styles.usuario}>
+                  {filme.usuarios.map((usuarioId) => (
+                    <Text key={usuarioId}>{usuarioId}</Text>
+                  ))}
+                </View>
+              </>
+            )}
             <Text>-----------------------</Text>
           </View>
         ))
@@ -40,5 +67,20 @@ export function MostrarFilmes() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  usuario: {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    fontSize: 20,
+    margin: 5,
+    borderColor: "gray",
+    borderWidth: 1,
+    borderRadius: 10,
+    fontFamily: "Roboto",
+    padding: 10,
+  },
+});
 
 export default MostrarFilmes;
